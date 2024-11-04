@@ -14,5 +14,7 @@ router.get('/user/:id', articleController.getArticleByUserAndId);
 router.put('/:id', upload.single('image'), articleController.updateArticle);
 router.delete('/:id', articleController.deleteArticle);
 router.post('/:id/block', articleController.blockArticle);
+router.post('/:id/like', articleController.likeArticle);
+router.post('/:id/dislike', articleController.dislikeArticle);
 
 module.exports = router; 

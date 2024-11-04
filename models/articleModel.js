@@ -55,7 +55,27 @@ const articleSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now
-  }
+  },
+  likes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  dislikes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }]
 });
+
+// Add virtual field for counts
+articleSchema.virtual('likeCount').get(function() {
+  return this.likes.length;
+});
+
+articleSchema.virtual('dislikeCount').get(function() {
+  return this.dislikes.length;
+});
+
+// Enable virtuals in JSON
+articleSchema.set('toJSON', { virtuals: true });
 
 module.exports = mongoose.model('Article', articleSchema); 

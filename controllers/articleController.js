@@ -200,4 +200,72 @@ exports.blockArticle = async (req, res) => {
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
+};
+
+exports.likeArticle = async (req, res) => {
+  try {
+    const article = await Article.findById(req.params.id);
+    
+    if (!article) {
+      return res.status(404).json({ message: 'Article not found' });
+    }
+
+    // Remove from dislikes if exists
+    const dislikeIndex = article.dislikes.indexOf(req.user._id);
+    if (dislikeIndex > -1) {
+      article.dislikes.splice(dislikeIndex, 1);
+    }
+
+    // Toggle like
+    const likeIndex = article.likes.indexOf(req.user._id);
+    if (likeIndex > -1) {
+      article.likes.splice(likeIndex, 1); // Unlike
+    } else {
+      article.likes.push(req.user._id); // Like
+    }
+
+    await article.save();
+    res.json({
+      likes: article.likes.length,
+      dislikes: article.dislikes.length,
+      isLiked: article.likes.includes(req.user._id),
+      isDisliked: article.dislikes.includes(req.user._id)
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+exports.dislikeArticle = async (req, res) => {
+  try {
+    const article = await Article.findById(req.params.id);
+    
+    if (!article) {
+      return res.status(404).json({ message: 'Article not found' });
+    }
+
+    // Remove from likes if exists
+    const likeIndex = article.likes.indexOf(req.user._id);
+    if (likeIndex > -1) {
+      article.likes.splice(likeIndex, 1);
+    }
+
+    // Toggle dislike
+    const dislikeIndex = article.dislikes.indexOf(req.user._id);
+    if (dislikeIndex > -1) {
+      article.dislikes.splice(dislikeIndex, 1); // Remove dislike
+    } else {
+      article.dislikes.push(req.user._id); // Add dislike
+    }
+
+    await article.save();
+    res.json({
+      likes: article.likes.length,
+      dislikes: article.dislikes.length,
+      isLiked: article.likes.includes(req.user._id),
+      isDisliked: article.dislikes.includes(req.user._id)
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
 }; 
