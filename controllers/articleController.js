@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { ERROR_MESSAGES } = require('../constants/validation');
 const { UPLOAD_CONFIG } = require('../constants/upload');
+const logger = require('../utils/logger');
 
 const deleteFile = (filePath) => {
   const fullPath = path.join(__dirname, '..', filePath.replace(/^\//, ''));
@@ -13,15 +14,12 @@ const deleteFile = (filePath) => {
 
 exports.createArticle = async (req, res, next) => {
   try {
-    console.log('Received request body:', req.body);
-    console.log('Received file:', req.file);
-
     if (!req.file) {
       return res.status(400).json('Image is required')
     }
 
     if (!req.body.title || !req.body.description || !req.body.category) {
-      return res.status(400).json( 'Title, description, and category are required')
+      return res.status(400).json('Title, description, and category are required')
     }
 
     const articleData = {
@@ -33,12 +31,10 @@ exports.createArticle = async (req, res, next) => {
       tags: req.body.tags ? JSON.parse(req.body.tags) : []
     };
 
-    console.log('Creating article with data:', articleData);
-
     const article = await Article.create(articleData);
-    return res.status(201).json({success:true,data:{article},message:'Article created successfully'} )
+    return res.status(201).json({success:true,data:{article},message:'Article created successfully'})
   } catch (error) {
-    console.error('Error creating article:', error);
+    logger.error('Error creating article', error);
     if (req.file) {
       fs.unlinkSync(req.file.path);
     }
@@ -49,23 +45,81 @@ exports.createArticle = async (req, res, next) => {
 
 exports.getArticles = async (req, res) => {
   try {
-    const articles = await Article.find({ deleted: false })
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const search = req.query.search;
+    const category = req.query.category;
+
+    let query = { deleted: false };
+
+    // Add category filter if provided
+    if (category) {
+      query.category = category;
+    }
+
+    // Add search filter if provided
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const articles = await Article.find(query)
       .populate('author', 'firstName lastName')
-      .sort({ createdAt: -1 });
-    res.json(articles);
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Article.countDocuments(query);
+    const hasMore = total > skip + articles.length;
+
+    res.json({
+      articles,
+      hasMore,
+      total,
+      currentPage: page
+    });
   } catch (error) {
+    logger.error('Error fetching articles', error);
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.getUserArticles = async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const articles = await Article.find({ 
       author: req.user._id,
       deleted: false 
-    }).sort({ createdAt: -1 });
-    res.json(articles);
+    })
+    .populate('author', 'firstName lastName')
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+    const total = await Article.countDocuments({ 
+      author: req.user._id, 
+      deleted: false 
+    });
+
+    const hasMore = total > skip + articles.length;
+
+    res.json({
+      success: true,
+      data: {
+        articles,
+        hasMore,
+        total,
+        currentPage: page
+      }
+    });
   } catch (error) {
+    logger.error('Error fetching user articles:', error);
     res.status(400).json({ message: error.message });
   }
 };
@@ -147,7 +201,7 @@ exports.updateArticle = async (req, res) => {
     await article.save();
     res.json(article);
   } catch (error) {
-    console.error('Error updating article:', error);
+    logger.error('Error updating article', error);
     if (req.file) {
       await deleteFile(`/uploads/${req.file.filename}`);
     }

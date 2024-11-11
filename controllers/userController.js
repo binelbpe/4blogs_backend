@@ -6,6 +6,7 @@ const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = requir
 const { ERROR_MESSAGES } = require('../constants/validation');
 const { TOKEN_CONFIG } = require('../constants/tokens');
 const { UPLOAD_CONFIG } = require('../constants/upload');
+const logger = require('../utils/logger');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -23,15 +24,9 @@ const deleteFile = (filePath) => {
 
 exports.register = async (req, res) => {
   try {
-    console.log('Registration request:', {
-      body: req.body,
-      file: req.file ? 'File present' : 'No file'
-    });
- 
-
     const { email, phone } = req.body;
-  
     const userExists = await User.findOne({ $or: [{ email }, { phone }] });
+    
     if (userExists) {
       if (req.file) {
         deleteFile(req.file.path);
@@ -43,7 +38,6 @@ exports.register = async (req, res) => {
       });
     }
 
- 
     let preferences = [];
     if (req.body.preferences) {
       try {
@@ -52,14 +46,12 @@ exports.register = async (req, res) => {
           throw new Error('Preferences must be an array');
         }
       } catch (error) {
-        console.error('Error parsing preferences:', error);
         if (req.file) {
           deleteFile(req.file.path);
         }
         return res.status(400).json({message: 'Invalid preferences format'||error.message})
       }
     }
-
 
     const userData = {
       firstName: req.body.firstName,
@@ -72,22 +64,15 @@ exports.register = async (req, res) => {
       image: req.file ? `/uploads/${req.file.filename}` : null
     };
 
-    console.log('Creating user with data:', {
-      ...userData,
-      password: '[HIDDEN]',
-      image: userData.image ? 'Image path present' : 'No image'
-    });
-
     const user = await User.create(userData);
     const token = generateToken(user._id);
-return res.status(201).json({success:true,data:{token,user: user.toPublicJSON()},message:'Registration successful'})
-
+    return res.status(201).json({success:true,data:{token,user: user.toPublicJSON()},message:'Registration successful'})
   } catch (error) {
-    console.error('Registration error:', error);
+    logger.error('Registration failed', error);
     if (req.file) {
       deleteFile(req.file.path);
     }
-    return res.status(400).jason({message:'Registration failed' })
+    return res.status(400).json({message:'Registration failed'})
   }
 };
 
@@ -124,7 +109,7 @@ exports.login = async (req, res) => {
       message: 'Login successful'
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login failed', error);
     return res.status(400).json({ message: error.message || 'Login failed' });
   }
 };
@@ -165,7 +150,7 @@ exports.refreshToken = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Refresh token error:', error);
+    logger.error('Token refresh failed', error);
     return res.status(400).json({ message: 'Failed to refresh token' });
   }
 };
@@ -178,7 +163,6 @@ exports.logout = async (req, res) => {
 
     return res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
-    console.error('Logout error:', error);
     return res.status(400).json({ message: 'Failed to logout' });
   }
 };
@@ -195,7 +179,6 @@ exports.getUserProfile = async (req, res) => {
 
     res.json(user);
   } catch (error) {
-    console.error('Error fetching user profile:', error);
     res.status(400).json({message:error.message||'Error fetching user profile'} );
   }
 };
@@ -211,7 +194,6 @@ exports.getUserArticles = async (req, res) => {
 
     res.json(articles);
   } catch (error) {
-    console.error('Error fetching user articles:', error);
     res.status(400).json({message:error.message||'Error fetching user articles'});
   }
 }; 
@@ -231,82 +213,55 @@ exports.getProfile = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    console.log('=== Update Profile Request ===');
-    console.log('Request body:', req.body);
-    console.log('Request file:', req.file);
-    console.log('User ID:', req.user._id);
-
     const user = await User.findById(req.user._id);
 
     if (!user) {
-      console.log('User not found:', req.user._id);
       if (req.file) {
-        console.log('Deleting uploaded file due to user not found');
         deleteFile(req.file.path);
       }
       return res.status(404).json({message:'User not found'})
     }
 
-    console.log('Found user:', user);
-
     if (req.file) {
-      console.log('Processing new image upload');
       if (user.image) {
-        console.log('Deleting old image:', user.image);
         deleteFile(user.image);
       }
       user.image = `/uploads/${req.file.filename}`;
-      console.log('Updated image path:', user.image);
     }
     const fieldsToUpdate = ['firstName', 'lastName', 'email', 'phone'];
-    console.log('Updating fields:', fieldsToUpdate);
     fieldsToUpdate.forEach(field => {
       if (req.body[field]) {
-        console.log(`Updating ${field}:`, req.body[field]);
         user[field] = req.body[field];
       }
     });
 
     if (req.body.preferences) {
       try {
-        console.log('Raw preferences:', req.body.preferences);
         user.preferences = JSON.parse(req.body.preferences);
-        console.log('Parsed preferences:', user.preferences);
       } catch (error) {
         console.error('Error parsing preferences:', error);
       }
     }
 
     if (req.body.currentPassword && req.body.newPassword) {
-      console.log('Processing password update');
       const isMatch = await user.comparePassword(req.body.currentPassword);
       if (!isMatch) {
       
         return res.status(400).json({message:'Current password is incorrect'})
       }
       user.password = req.body.newPassword;
-      console.log('Password updated successfully');
     }
 
-    console.log('Saving user updates...');
     await user.save();
     
     const updatedUser = user.toPublicJSON();
-    console.log('User updated successfully:', updatedUser);
     return res.status(200).json({success:true,data:{user: updatedUser},message:'Profile updated successfully'})
 
   } catch (error) {
-    console.error('=== Update Profile Error ===');
-    console.error('Error details:', error);
-    console.error('Error stack:', error.stack);
-    
     if (req.file) {
-      console.log('Cleaning up uploaded file due to error');
       deleteFile(req.file.path);
     }
-    
     if (error.name === 'ValidationError') {
-      console.error('Validation error details:', error.errors);
       return res.status(400).json({message:'Validation failed: ' + Object.values(error.errors).map(e => e.message).join(', ')})
     }
     return res.status(400).json({message:error.message || 'Failed to update profile'})

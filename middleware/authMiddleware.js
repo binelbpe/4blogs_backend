@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
 const { ERROR_MESSAGES } = require('../constants/validation');
+const logger = require('../utils/logger');
 
 const auth = async (req, res, next) => {
   try {
@@ -21,6 +22,11 @@ const auth = async (req, res, next) => {
     req.token = token;
     next();
   } catch (error) {
+    logger.error('Authentication failed', {
+      error,
+      path: req.path,
+      method: req.method
+    });
     res.status(401).json({ message: ERROR_MESSAGES.AUTH.INVALID_TOKEN });
   }
 };

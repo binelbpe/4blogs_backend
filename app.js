@@ -7,6 +7,7 @@ const fs = require('fs');
 const articleRoutes = require('./routes/articleRoutes');
 const userRoutes = require('./routes/userRoutes');
 const errorHandler = require('./middleware/errorMiddleware');
+const logger = require('./utils/logger');
 
 const app = express();
 
@@ -44,15 +45,16 @@ app.use(errorHandler);
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
-    console.log('Connected to MongoDB successfully');
-    console.log('MongoDB URI:', process.env.MONGODB_URI);
+    logger.info('MongoDB connection successful', {
+      uri: process.env.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//***:***@') // Hide credentials
+    });
   })
   .catch((err) => {
-    console.error('MongoDB connection error:', err);
+    logger.error('MongoDB connection failed', err);
     process.exit(1);
   });
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  logger.info('Server started', { port: PORT });
 }); 
