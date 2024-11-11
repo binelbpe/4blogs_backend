@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { CATEGORIES } = require('../constants/categories');
 
 const articleSchema = new mongoose.Schema({
   title: {
@@ -13,24 +14,7 @@ const articleSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: [
-      'sports',
-      'politics',
-      'space',
-      'technology',
-      'entertainment',
-      'health',
-      'science',
-      'business',
-      'education',
-      'travel',
-      'food',
-      'fashion',
-      'art',
-      'music',
-      'gaming',
-      'environment'
-    ]
+    enum: CATEGORIES
   },
   image: {
     type: String
@@ -66,7 +50,7 @@ const articleSchema = new mongoose.Schema({
   }]
 });
 
-// Add virtual field for counts
+
 articleSchema.virtual('likeCount').get(function() {
   return this.likes.length;
 });
@@ -75,7 +59,6 @@ articleSchema.virtual('dislikeCount').get(function() {
   return this.dislikes.length;
 });
 
-// Enable virtuals in JSON
 articleSchema.set('toJSON', { virtuals: true });
 
 module.exports = mongoose.model('Article', articleSchema); 

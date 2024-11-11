@@ -1,7 +1,8 @@
 const Article = require('../models/articleModel');
 const fs = require('fs');
 const path = require('path');
-
+const { ERROR_MESSAGES } = require('../constants/validation');
+const { UPLOAD_CONFIG } = require('../constants/upload');
 
 const deleteFile = (filePath) => {
   const fullPath = path.join(__dirname, '..', filePath.replace(/^\//, ''));
@@ -93,10 +94,10 @@ exports.getArticleById = async (req, res) => {
     }).populate('author', 'firstName lastName');
     
     if (!article) {
-      return res.status(404).json({ message: 'Article not found' });
+      return res.status(404).json({ message: ERROR_MESSAGES.ARTICLE.NOT_FOUND });
     }
     if (req.user && article.blocks.includes(req.user._id)) {
-      return res.status(403).json({ message: 'Article is not available' });
+      return res.status(403).json({ message: ERROR_MESSAGES.ARTICLE.BLOCKED });
     }
     
     res.json(article);
@@ -116,7 +117,7 @@ exports.updateArticle = async (req, res) => {
       return res.status(404).json({ message: 'Article not found' });
     }
 
-    // Handle image updates
+  
     if (req.body.removeImage === 'true') {
       if (article.image) {
         await deleteFile(article.image);
@@ -129,12 +130,11 @@ exports.updateArticle = async (req, res) => {
       article.image = `/uploads/${req.file.filename}`;
     }
 
-    // Update basic fields
+
     if (req.body.title) article.title = req.body.title;
     if (req.body.description) article.description = req.body.description;
     if (req.body.category) article.category = req.body.category;
-
-    // Handle tags
+ 
     if (req.body.tags) {
       try {
         article.tags = JSON.parse(req.body.tags);
@@ -148,7 +148,6 @@ exports.updateArticle = async (req, res) => {
     res.json(article);
   } catch (error) {
     console.error('Error updating article:', error);
-    // Clean up uploaded file if there was an error
     if (req.file) {
       await deleteFile(`/uploads/${req.file.filename}`);
     }
@@ -183,10 +182,7 @@ exports.blockArticle = async (req, res) => {
     if (!article) {
       return res.status(404).json({ message: 'Article not found' });
     }
-    
-    // if (article.author.toString() !== req.user._id.toString()) {
-    //   return res.status(403).json({ message: 'Only the author can block their own article' });
-    // }
+  
 
     const blockIndex = article.blocks.indexOf(req.user._id);
     if (blockIndex > -1) {
@@ -210,18 +206,17 @@ exports.likeArticle = async (req, res) => {
       return res.status(404).json({ message: 'Article not found' });
     }
 
-    // Remove from dislikes if exists
     const dislikeIndex = article.dislikes.indexOf(req.user._id);
     if (dislikeIndex > -1) {
       article.dislikes.splice(dislikeIndex, 1);
     }
 
-    // Toggle like
+ 
     const likeIndex = article.likes.indexOf(req.user._id);
     if (likeIndex > -1) {
-      article.likes.splice(likeIndex, 1); // Unlike
+      article.likes.splice(likeIndex, 1); 
     } else {
-      article.likes.push(req.user._id); // Like
+      article.likes.push(req.user._id); 
     }
 
     await article.save();
@@ -244,18 +239,16 @@ exports.dislikeArticle = async (req, res) => {
       return res.status(404).json({ message: 'Article not found' });
     }
 
-    // Remove from likes if exists
     const likeIndex = article.likes.indexOf(req.user._id);
     if (likeIndex > -1) {
       article.likes.splice(likeIndex, 1);
     }
 
-    // Toggle dislike
     const dislikeIndex = article.dislikes.indexOf(req.user._id);
     if (dislikeIndex > -1) {
-      article.dislikes.splice(dislikeIndex, 1); // Remove dislike
+      article.dislikes.splice(dislikeIndex, 1); 
     } else {
-      article.dislikes.push(req.user._id); // Add dislike
+      article.dislikes.push(req.user._id); 
     }
 
     await article.save();

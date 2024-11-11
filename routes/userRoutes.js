@@ -12,4 +12,7 @@ router.put('/update_profile', auth, upload.single('image'), userController.updat
 router.get('/:id',auth, userController.getUserProfile);
 router.get('/:id/articles',auth, userController.getUserArticles);
 
+router.post('/refresh-token', userController.refreshToken);
+router.post('/logout', auth, userController.logout);
+
 module.exports = router; 

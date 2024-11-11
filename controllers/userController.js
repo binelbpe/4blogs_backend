@@ -2,6 +2,10 @@ const User = require('../models/userModel');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const { generateAccessToken, generateRefreshToken, verifyRefreshToken } = require('../utils/tokenUtils');
+const { ERROR_MESSAGES } = require('../constants/validation');
+const { TOKEN_CONFIG } = require('../constants/tokens');
+const { UPLOAD_CONFIG } = require('../constants/upload');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -32,9 +36,11 @@ exports.register = async (req, res) => {
       if (req.file) {
         deleteFile(req.file.path);
       }
-      return res.status(400).json({message: userExists.email === email 
-        ? 'Email already registered' 
-        : 'Phone number already registered'})
+      return res.status(400).json({
+        message: userExists.email === email 
+          ? ERROR_MESSAGES.USER.EMAIL_EXISTS 
+          : ERROR_MESSAGES.USER.PHONE_EXISTS
+      });
     }
 
  
@@ -93,33 +99,87 @@ exports.login = async (req, res) => {
       $or: [{ email: identifier }, { phone: identifier }]
     });
 
-    if (!user) {
-      return res.status(401).json({message:'Invalid credentials'})
-
+    if (!user || !(await user.comparePassword(password))) {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(401).json({message:'Invalid credentials'})
-    }
+    // Generate tokens
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
 
-    const token = generateToken(user._id);
+    // Save refresh token
+    user.refreshToken = refreshToken;
+    await user.save();
 
-    const userData = {
-      id: user._id, 
-      _id: user._id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      phone: user.phone,
-      image: user.image,
-      preferences: user.preferences,
-      createdAt: user.createdAt
-    };
-return res.status(200).json({success:true,data:{token,user: userData}, message:'Login successful'})
+    // Get user data without sensitive info
+    const userData = user.toPublicJSON();
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        user: userData,
+        accessToken,
+        refreshToken
+      },
+      message: 'Login successful'
+    });
   } catch (error) {
     console.error('Login error:', error);
-  return res.status(400).json({message:error.message||'Login failed'})
+    return res.status(400).json({ message: error.message || 'Login failed' });
+  }
+};
+
+exports.refreshToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({ message: 'Refresh token required' });
+    }
+
+    const decoded = verifyRefreshToken(refreshToken);
+    if (!decoded) {
+      return res.status(401).json({ message: 'Invalid refresh token' });
+    }
+
+    const user = await User.findOne({
+      _id: decoded.id,
+      refreshToken: refreshToken
+    });
+
+    if (!user) {
+      return res.status(401).json({ message: 'User not found or token revoked' });
+    }
+
+    const newAccessToken = generateAccessToken(user._id);
+    const newRefreshToken = generateRefreshToken(user._id);
+
+    user.refreshToken = newRefreshToken;
+    await user.save();
+
+    return res.json({
+      success: true,
+      data: {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken
+      }
+    });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    return res.status(400).json({ message: 'Failed to refresh token' });
+  }
+};
+
+exports.logout = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    user.refreshToken = null;
+    await user.save();
+
+    return res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    return res.status(400).json({ message: 'Failed to logout' });
   }
 };
 

@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { CATEGORIES } = require('../constants/categories');
+const { VALIDATION_RULES } = require('../constants/validation');
 
 const userSchema = new mongoose.Schema({
   firstName: {
@@ -40,24 +42,7 @@ const userSchema = new mongoose.Schema({
   preferences: {
     type: [{
       type: String,
-      enum: [
-        'sports',
-        'politics',
-        'space',
-        'technology',
-        'entertainment',
-        'health',
-        'science',
-        'business',
-        'education',
-        'travel',
-        'food',
-        'fashion',
-        'art',
-        'music',
-        'gaming',
-        'environment'
-      ]
+      enum: CATEGORIES
     }],
     default: []
   },
@@ -68,6 +53,10 @@ const userSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  refreshToken: {
+    type: String,
+    default: null
   }
 });
 
